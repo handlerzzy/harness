@@ -243,6 +243,15 @@ async def _run_loop(
                     new_messages.append(result)
 
             await _emit(emit, {"type": "turn_end", "message": message, "toolResults": tool_results})
+            if signal is not None and signal.aborted:
+                # Cancellation wins over stop hooks and queued work, and does
+                # not invoke another provider after tool execution finishes.
+                await _emit(emit, {"type": "turn_start"})
+                aborted = await _stream_assistant_response(current_context, config, signal, emit, stream_fn)
+                new_messages.append(aborted)
+                await _emit(emit, {"type": "turn_end", "message": aborted, "toolResults": []})
+                await _emit(emit, {"type": "agent_end", "messages": new_messages})
+                return
             next_turn_context = {
                 "message": message,
                 "toolResults": tool_results,
@@ -296,6 +305,21 @@ async def _stream_assistant_response(
     emit: AgentEventSink,
     stream_fn: StreamFn | None,
 ) -> AgentMessage:
+    if signal is not None and signal.aborted:
+        aborted: AgentMessage = {
+            "role": "assistant",
+            "content": [],
+            "api": config.model.get("api", "unknown"),
+            "provider": config.model.get("provider", "unknown"),
+            "model": config.model.get("id", "unknown"),
+            "stopReason": "aborted",
+            "errorMessage": "Operation aborted",
+            "timestamp": now_ms(),
+        }
+        context.messages.append(aborted)
+        await _emit(emit, {"type": "message_start", "message": dict(aborted)})
+        await _emit(emit, {"type": "message_end", "message": aborted})
+        return aborted
     messages = context.messages
     if config.transform_context is not None:
         messages = await maybe_await(config.transform_context(messages, signal))
@@ -387,6 +411,12 @@ class _FinalizedToolCall:
     is_error: bool
 
 
+def _cancelled_tool_call(tool_call: dict[str, Any]) -> _FinalizedToolCall:
+    return _FinalizedToolCall(
+        tool_call, {"content": [{"type": "text", "text": "Operation aborted"}], "details": {"aborted": True}}, True
+    )
+
+
 async def _fail_tool_calls_from_truncated_message(
     tool_calls: list[dict[str, Any]], emit: AgentEventSink
 ) -> _ExecutedBatch:
@@ -449,6 +479,13 @@ async def _execute_tool_calls_sequential(
     finalized_calls: list[_FinalizedToolCall] = []
     messages: list[AgentMessage] = []
     for tool_call in tool_calls:
+        if signal is not None and signal.aborted:
+            finalized = _cancelled_tool_call(tool_call)
+            message = _create_tool_result_message(finalized)
+            await _emit_tool_result_message(message, emit)
+            finalized_calls.append(finalized)
+            messages.append(message)
+            continue
         await _emit_tool_start(tool_call, emit)
         preparation = await _prepare_tool_call(context, assistant_message, tool_call, config, signal)
         if isinstance(preparation, _FinalizedToolCall):
@@ -463,8 +500,6 @@ async def _execute_tool_calls_sequential(
         await _emit_tool_result_message(message, emit)
         finalized_calls.append(finalized)
         messages.append(message)
-        if signal is not None and signal.aborted:
-            break
     return _ExecutedBatch(messages, _should_terminate_tool_batch(finalized_calls))
 
 
@@ -478,17 +513,22 @@ async def _execute_tool_calls_parallel(
 ) -> _ExecutedBatch:
     entries: list[_FinalizedToolCall | _PreparedToolCall] = []
     for tool_call in tool_calls:
+        if signal is not None and signal.aborted:
+            entries.append(_cancelled_tool_call(tool_call))
+            continue
         await _emit_tool_start(tool_call, emit)
         preparation = await _prepare_tool_call(context, assistant_message, tool_call, config, signal)
         if isinstance(preparation, _FinalizedToolCall):
             await _emit_tool_execution_end(preparation, emit)
         entries.append(preparation)
-        if signal is not None and signal.aborted:
-            break
 
     async def execute(entry: _FinalizedToolCall | _PreparedToolCall) -> _FinalizedToolCall:
         if isinstance(entry, _FinalizedToolCall):
             return entry
+        if signal is not None and signal.aborted:
+            finalized = _cancelled_tool_call(entry.tool_call)
+            await _emit_tool_execution_end(finalized, emit)
+            return finalized
         result, is_error = await _execute_prepared_tool_call(entry, signal, emit)
         finalized = await _finalize_executed_tool_call(
             context, assistant_message, entry, result, is_error, config, signal
@@ -575,6 +615,8 @@ async def _execute_prepared_tool_call(
 
     execute = _tool_field(prepared.tool, "execute")
     try:
+        if signal is not None:
+            signal.throw_if_aborted()
         if not callable(execute):
             raise TypeError(f"Tool {prepared.tool_call.get('name')} has no executable callback")
         result = await _invoke_tool_execute(execute, prepared.tool_call["id"], prepared.args, signal, on_update)

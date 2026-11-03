@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import codecs
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, TypeAlias, cast
 
 import httpx
@@ -397,53 +397,65 @@ def stream_proxy(model: Any, context: Mapping[str, Any], options: Mapping[str, A
     }
     signal = cast(AbortSignal | None, options.get("signal"))
 
+    async def request(client: httpx.AsyncClient) -> dict[str, Any]:
+        proxy_url = str(options.get("proxyUrl", options.get("proxy_url", "")))
+        auth_token = str(options.get("authToken", options.get("auth_token", "")))
+        request_body = js_json_stringify(
+            {"model": model, "context": dict(context), "options": build_proxy_request_options(options)}
+        )
+        if request_body is None:
+            raise TypeError("Proxy request is not JSON serializable")
+        async with client.stream(
+            "POST",
+            f"{proxy_url}/api/stream",
+            headers={"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"},
+            content=request_body.encode("utf-8", errors="surrogatepass"),
+        ) as response:
+            if response.status_code < 200 or response.status_code >= 300:
+                message = f"Proxy error: {response.status_code} {response.reason_phrase}"
+                try:
+                    parsed = json.loads(await response.aread())
+                    if isinstance(parsed, dict) and parsed.get("error"):
+                        message = f"Proxy error: {parsed['error']}"
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                raise RuntimeError(message)
+            decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+            buffer = ""
+            async for chunk in response.aiter_bytes():
+                if signal and signal.aborted:
+                    raise asyncio.CancelledError("Request aborted by user")
+                buffer += decoder.decode(chunk, final=False)
+                lines = buffer.split("\n")
+                buffer = lines.pop() or ""
+                for line in lines:
+                    if line.startswith("data: "):
+                        data = line[6:].strip()
+                        if data:
+                            event = process_proxy_event(_strict_json_loads(data), partial)
+                            if event is not None:
+                                if event["type"] in {"done", "error"}:
+                                    return event
+                                stream.push(event)
+        raise RuntimeError("Proxy stream ended without a terminal event")
+
     async def run() -> object:
-        provided_client = options.get("httpClient", options.get("http_client"))
-        owns_client = provided_client is None
-        client = httpx.AsyncClient() if provided_client is None else provided_client
+        remove_abort: Callable[[], None] | None = None
         try:
-            if signal and signal.aborted:
-                raise asyncio.CancelledError("Request aborted by user")
-            proxy_url = str(options.get("proxyUrl", options.get("proxy_url", "")))
-            auth_token = str(options.get("authToken", options.get("auth_token", "")))
-            request_body = js_json_stringify(
-                {"model": model, "context": dict(context), "options": build_proxy_request_options(options)}
-            )
-            if request_body is None:
-                raise TypeError("Proxy request is not JSON serializable")
-            async with client.stream(
-                "POST",
-                f"{proxy_url}/api/stream",
-                headers={"Authorization": f"Bearer {auth_token}", "Content-Type": "application/json"},
-                content=request_body.encode("utf-8", errors="surrogatepass"),
-            ) as response:
-                if response.status_code < 200 or response.status_code >= 300:
-                    message = f"Proxy error: {response.status_code} {response.reason_phrase}"
-                    try:
-                        parsed = json.loads(await response.aread())
-                        if isinstance(parsed, dict) and parsed.get("error"):
-                            message = f"Proxy error: {parsed['error']}"
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-                    raise RuntimeError(message)
-                decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-                buffer = ""
-                async for chunk in response.aiter_bytes():
-                    if signal and signal.aborted:
-                        raise asyncio.CancelledError("Request aborted by user")
-                    buffer += decoder.decode(chunk, final=False)
-                    lines = buffer.split("\n")
-                    buffer = lines.pop() or ""
-                    for line in lines:
-                        if line.startswith("data: "):
-                            data = line[6:].strip()
-                            if data:
-                                event = process_proxy_event(_strict_json_loads(data), partial)
-                                if event is not None:
-                                    stream.push(event)
-            if signal and signal.aborted:
-                raise asyncio.CancelledError("Request aborted by user")
-            stream.end()
+            if signal is not None:
+                signal.throw_if_aborted()
+                task = asyncio.current_task()
+                assert task is not None
+                remove_abort = signal.add_callback(task.cancel)
+            provided_client = options.get("httpClient", options.get("http_client"))
+            if provided_client is None:
+                async with httpx.AsyncClient() as client:
+                    terminal = await request(client)
+            else:
+                terminal = await request(provided_client)
+            if signal is not None:
+                signal.throw_if_aborted()
+            stream.push(terminal)
         except BaseException as error:
             if isinstance(error, (KeyboardInterrupt, SystemExit)):
                 raise
@@ -451,20 +463,13 @@ def stream_proxy(model: Any, context: Mapping[str, Any], options: Mapping[str, A
             partial["stopReason"] = reason
             partial["errorMessage"] = "Request aborted by user" if reason == "aborted" else str(error)
             stream.push({"type": "error", "reason": reason, "error": partial})
-            stream.end()
         finally:
-            if owns_client:
-                await client.aclose()
+            if remove_abort is not None:
+                remove_abort()
+            stream.end()
         return None
 
     task = asyncio.create_task(run())
-    loop = asyncio.get_running_loop()
-
-    def cancel_request() -> None:
-        loop.call_soon(task.cancel, "Request aborted by user")
-
-    remove_abort = signal.add_callback(cancel_request) if signal and not signal.aborted else lambda: None
-    task.add_done_callback(lambda _task: remove_abort())
     stream.attach_task(task)
     return stream
 

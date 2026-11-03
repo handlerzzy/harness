@@ -109,12 +109,47 @@ otherwise history stays in memory. API keys stay on the model access object,
 not in the model dictionary or Session. Pass `http_client=httpx.AsyncClient(...)`
 to control the HTTP transport, including offline tests. The caller owns that
 client and must close it; without one the adapter closes its own client per
-request. The 60-second default bounds the entire request, including response
-reading; `timeout_ms` overrides it. Model requests perform no retries.
+model call. The 60-second default bounds each HTTP attempt, including response
+reading; `timeout_ms` overrides it and must be finite and positive.
+
+Chat Completions retries at most twice (three attempts total), waiting 100 ms
+and 200 ms by default. Only HTTP 408, 429, 500, 502, 503, 504, timeouts, network
+failures, and remote protocol disconnects are eligible, and only before any model
+event (including `start`) has been published. Credential/configuration errors,
+other HTTP statuses, malformed model responses, and cancellation are not retried.
+Once generation starts, a failure preserves the partial content with
+`stopReason="error"`; it never joins a second attempt onto those deltas. Retries
+repeat the current request with its completed tool results, never the Agent task
+or its already executed tools. This does not promise deduplication of work inside
+the remote model service.
+
+Configure this through the existing Harness options:
+
+```python
+await harness.set_stream_options({"maxRetries": 1, "maxRetryDelayMs": 500})
+# Set maxRetries to 0 to disable retries.
+```
+
+`Models.stream_simple` and `complete_simple` accept the same options directly.
+`maxRetries` is a non-negative integer; `maxRetryDelayMs` is a finite non-negative
+cap on exponential waits starting at 100 ms (default cap: 1,000 ms). Server
+`Retry-After` headers do not extend these waits. Timeouts apply per attempt, so
+the default HTTP work for one model call is bounded by approximately 180.3 seconds
+including retries; cancellation also interrupts the backoff wait.
 
 For concurrent cancellation, run `prompt()` in an asyncio task, then
 `await harness.abort()` from another task; await the prompt task to obtain the
 `aborted` result. Cancelling a subscriber alone does not cancel the provider.
+For direct model calls, pass an `AbortController().signal` in options and call
+that controller's `abort()`. Custom tools receive the same active `signal`:
+check `signal.throw_if_aborted()` before work and between awaitable steps, or
+use `signal.wait()` / `signal.add_callback(...)` to interrupt pending work. Release
+resources in `finally`; synchronous blocking callbacks cannot be interrupted by
+the event loop. Cancellation starts no further requests or tool callbacks.
+Unstarted calls receive error tool results to keep history paired, and the final
+assistant result is `aborted`. Request failures use assistant `stopReason="error"`;
+ordinary tool failures use tool-result / `tool_execution_end.isError=True` and
+can be handled by a subsequent model turn.
 
 The SDK supports text, custom tool calls/results, and optional thinking.
 Images, additional provider-specific extensions, and automatic context management
@@ -123,6 +158,9 @@ explicit model limit for later context management. A premature EOF without a
 legal `finish_reason` is an error, even after a `[DONE]` marker. A legal finish
 followed by EOF is accepted. Malformed JSON, HTTP failures, and timeouts terminate
 both event iteration and result waiting.
+The existing proxy likewise reports EOF without a terminal event as an error;
+it closes the response after a terminal event and settles both waiters, including
+on cancellation. It does not add proxy retries or a proxy server.
 
 Provider request, payload, response, context, and lifecycle hooks use the existing
 Harness paths. For compatible endpoints needing `max_tokens` instead of the

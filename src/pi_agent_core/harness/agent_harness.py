@@ -286,12 +286,17 @@ class AgentHarness:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[None] = loop.create_future()
         self._idle_future = future
+        controller = AbortController() if self._phase == "turn" else None
+        if controller is not None:
+            self._run_abort_controller = controller
 
         def finish() -> None:
             if not future.done():
                 future.set_result(None)
             if self._idle_future is future:
                 self._idle_future = None
+            if self._run_abort_controller is controller:
+                self._run_abort_controller = None
 
         return finish
 
@@ -565,7 +570,7 @@ class AgentHarness:
         )
         if before and before.get("messages"):
             messages.extend(before["messages"])
-        controller = AbortController()
+        controller = self._run_abort_controller or AbortController()
         self._run_abort_controller = controller
 
         def get_state() -> dict[str, Any]:

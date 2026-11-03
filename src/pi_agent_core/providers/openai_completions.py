@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import math
 from collections.abc import AsyncIterator, Callable, Mapping
 from typing import Any
 
@@ -11,6 +12,8 @@ import httpx
 from .._utils import get_field, maybe_await, now_ms
 from ..event_stream import AssistantMessageEventStream
 from ..types import Model
+
+_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
 
 
 def _text(content: Any, *, assistant: bool = False, separator: str = "") -> str:
@@ -139,16 +142,18 @@ def stream_chat_completions(
         "stopReason": "stop",
         "timestamp": now_ms(),
     }
+    published = False
+    retryable_response = True
 
     def emit(event_type: str, **fields: Any) -> None:
+        nonlocal published
+        published = True
         stream.push({"type": event_type, "partial": copy.deepcopy(message), **fields})
 
-    async def request(client: httpx.AsyncClient) -> None:
-        payload = _payload(model, context, options)
-        if callback := options.get("onPayload"):
-            replacement = await maybe_await(callback(payload))
-            if replacement is not None:
-                payload = replacement
+    async def request(client: httpx.AsyncClient, payload: Any) -> None:
+        nonlocal retryable_response
+        if signal := options.get("signal"):
+            signal.throw_if_aborted()
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "text/event-stream"}
         headers.update(options.get("headers") or {})
         async with client.stream(
@@ -158,11 +163,18 @@ def stream_chat_completions(
             headers=headers,
             timeout=options.get("timeoutMs", 60_000) / 1000,
         ) as response:
+            # A known permanent status stays permanent even if reading its
+            # error body subsequently times out or disconnects.
+            retryable_response = response.is_success or response.status_code in _TRANSIENT_HTTP_STATUSES
             if callback := options.get("onResponse"):
                 await maybe_await(callback({"status": response.status_code, "headers": dict(response.headers)}))
             if not response.is_success:
                 body = (await response.aread()).decode("utf-8", errors="replace")
-                raise ValueError(f"Chat Completions HTTP {response.status_code}: {body}")
+                raise httpx.HTTPStatusError(
+                    f"Chat Completions HTTP {response.status_code}: {body}",
+                    request=response.request,
+                    response=response,
+                )
             emit("start")
             reason = None
             block_indexes: dict[str, int] = {}
@@ -268,6 +280,37 @@ def stream_chat_completions(
                 else:
                     emit(f"{kind}_end", contentIndex=index, content=block[kind])
 
+    async def request_with_retries(client: httpx.AsyncClient, payload: Any) -> None:
+        retries = options.get("maxRetries", 2)
+        delay_cap = options.get("maxRetryDelayMs", 1000)
+        timeout = options.get("timeoutMs", 60_000)
+        if type(retries) is not int or retries < 0:
+            raise ValueError("maxRetries must be a non-negative integer")
+        if not isinstance(delay_cap, (int, float)) or not math.isfinite(delay_cap) or delay_cap < 0:
+            raise ValueError("maxRetryDelayMs must be finite and non-negative")
+        if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeoutMs must be finite and positive")
+        delay = min(100, delay_cap)
+        for attempt in range(retries + 1):
+            try:
+                async with asyncio.timeout(timeout / 1000):
+                    await request(client, payload)
+                return
+            except (httpx.HTTPStatusError, httpx.TransportError, TimeoutError) as error:
+                transient = (
+                    error.response.status_code in _TRANSIENT_HTTP_STATUSES
+                    if isinstance(error, httpx.HTTPStatusError)
+                    else isinstance(
+                        error, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError, TimeoutError)
+                    )
+                )
+                if not transient or not retryable_response or published or attempt == retries:
+                    raise
+                # Only the failed HTTP request is repeated. No model events or
+                # tool execution can be replayed across this boundary.
+                await asyncio.sleep(delay / 1000)
+                delay = min(delay * 2, delay_cap)
+
     async def run() -> object:
         signal = options.get("signal")
         remove_abort: Callable[[], None] | None = None
@@ -277,12 +320,18 @@ def stream_chat_completions(
                 task = asyncio.current_task()
                 assert task is not None
                 remove_abort = signal.add_callback(task.cancel)
-            async with asyncio.timeout(options.get("timeoutMs", 60_000) / 1000):
-                if http_client is None:
-                    async with httpx.AsyncClient() as client:
-                        await request(client)
-                else:
-                    await request(http_client)
+            payload = _payload(model, context, options)
+            if callback := options.get("onPayload"):
+                replacement = await maybe_await(callback(payload))
+                if replacement is not None:
+                    payload = replacement
+            if http_client is None:
+                async with httpx.AsyncClient() as client:
+                    await request_with_retries(client, payload)
+            else:
+                await request_with_retries(http_client, payload)
+            if signal is not None:
+                signal.throw_if_aborted()
             stream.push({"type": "done", "reason": message["stopReason"], "message": message})
         except (Exception, asyncio.CancelledError) as error:
             reason = "aborted" if isinstance(error, asyncio.CancelledError) or (signal and signal.aborted) else "error"

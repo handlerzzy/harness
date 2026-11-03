@@ -232,5 +232,100 @@ async def test_stream_proxy_matches_fetch_chunk_decoding_and_ignores_unterminate
     events = [event async for event in stream]
     await client.aclose()
 
-    assert [event["type"] for event in events] == ["start", "text_start", "text_delta"]
-    assert events[-1]["delta"] == "🙂"
+    result = await asyncio.wait_for(stream.result(), 1)
+    assert [event["type"] for event in events] == ["start", "text_start", "text_delta", "error"]
+    assert events[-2]["delta"] == "🙂"
+    assert result["stopReason"] == "error"
+    assert "terminal" in result["errorMessage"]
+
+
+@pytest.mark.parametrize("body", [b"", b'data: {"type":"start"}\n\n'])
+async def test_proxy_eof_settles_both_event_consumption_and_result(body: bytes) -> None:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=body))) as client:
+        stream = stream_proxy(model(), {"messages": []}, {"proxyUrl": "https://proxy.example", "httpClient": client})
+
+        async def consume():
+            return [event async for event in stream]
+
+        events, result = await asyncio.wait_for(asyncio.gather(consume(), stream.result()), 1)
+        assert not client.is_closed
+
+    assert result["stopReason"] == "error"
+    assert events[-1] == {"type": "error", "reason": "error", "error": result}
+    assert "terminal" in result["errorMessage"]
+
+
+@pytest.mark.parametrize("terminal", ["done", "error"])
+async def test_proxy_terminal_closes_response_without_waiting_for_eof(terminal: str) -> None:
+    closed = asyncio.Event()
+
+    class OpenBody(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            event = {"type": terminal, "reason": "stop" if terminal == "done" else "error", "usage": usage()}
+            yield f"data: {json.dumps(event)}\n\n".encode()
+            await asyncio.Event().wait()
+
+        async def aclose(self):
+            closed.set()
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, stream=OpenBody()))
+    ) as client:
+        stream = stream_proxy(model(), {"messages": []}, {"proxyUrl": "https://proxy.example", "httpClient": client})
+
+        async def consume():
+            return [event async for event in stream]
+
+        events, result = await asyncio.wait_for(asyncio.gather(consume(), stream.result()), 1)
+
+    assert result["stopReason"] == ("stop" if terminal == "done" else "error")
+    assert [event["type"] for event in events] == [terminal]
+    assert closed.is_set()
+
+
+@pytest.mark.parametrize("stage", ["connect", "read"])
+async def test_proxy_cancellation_releases_request_and_settles_both_waiters(stage: str) -> None:
+    active = asyncio.Event()
+    released = asyncio.Event()
+    controller = AbortController()
+
+    class WaitingBody(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"type":"start"}\n\n'
+            active.set()
+            await asyncio.Event().wait()
+
+        async def aclose(self):
+            released.set()
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        if stage == "connect":
+            active.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                released.set()
+        return httpx.Response(200, stream=WaitingBody())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        stream = stream_proxy(
+            model(),
+            {"messages": []},
+            {
+                "proxyUrl": "https://proxy.example",
+                "httpClient": client,
+                "signal": controller.signal,
+            },
+        )
+        await asyncio.wait_for(active.wait(), 1)
+        controller.abort()
+
+        async def consume():
+            return [event async for event in stream]
+
+        events, result = await asyncio.wait_for(asyncio.gather(consume(), stream.result()), 1)
+        assert not client.is_closed
+
+    assert result["stopReason"] == "aborted"
+    assert events[-1] == {"type": "error", "reason": "aborted", "error": result}
+    assert released.is_set()
