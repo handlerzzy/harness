@@ -23,8 +23,10 @@ from .event_stream import (
 )
 from .harness import *
 from .harness import __all__ as _harness_all
+from .models import Models
 from .proxy import ProxyAssistantMessageEvent, ProxyMessageEventStream, ProxyStreamOptions, stream_proxy, streamProxy
 from .schema import validate_tool_arguments, validateToolArguments
+from .sdk import create_harness
 from .types import (
     AfterToolCallContext,
     AfterToolCallResult,
@@ -75,6 +77,7 @@ __all__ = [
     "CustomAgentMessages",
     "EventStream",
     "Model",
+    "Models",
     "PrepareNextTurnContext",
     "ProxyAssistantMessageEvent",
     "ProxyMessageEventStream",
@@ -90,6 +93,7 @@ __all__ = [
     "agent_loop_continue",
     "createAssistantMessageEventStream",
     "create_assistant_message_event_stream",
+    "create_harness",
     "runAgentLoop",
     "runAgentLoopContinue",
     "run_agent_loop",

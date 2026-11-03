@@ -33,9 +33,115 @@ python -m pip install -e ".[dev]"
 
 ## Quick start
 
-The upstream package receives provider streaming from its sibling `pi-ai`
-package. The Python port keeps that same boundary: inject a `stream_fn`, attach
-one to the model as `stream_fn`/`stream`, or use `stream_proxy`.
+Configure a Chat Completions endpoint and use the public SDK entry point:
+
+```python
+import asyncio
+import os
+
+from pi_agent_core import create_harness
+
+
+async def main():
+    harness = create_harness(
+        api_key=os.environ["MODEL_API_KEY"],
+        base_url="https://api.openai.com/v1",  # API root, without /chat/completions
+        model_id="gpt-4o-mini",
+        context_window=128_000,
+        max_tokens=2048,
+        system_prompt="You are a helpful assistant.",
+        cwd=".",
+        temperature=0.2,  # optional; omitted by default
+        timeout_ms=60_000,
+    )
+
+    def on_event(event):
+        if event["type"] == "message_update":
+            update = event["assistantMessageEvent"]
+            if update["type"] == "text_delta":
+                print(update["delta"], end="", flush=True)
+
+    unsubscribe = harness.subscribe(on_event)
+    result = await harness.prompt("Hello!")
+    print("\n", result["stopReason"])
+    await harness.prompt("What did I just say?")  # reuses the in-memory Session
+    unsubscribe()
+
+
+asyncio.run(main())
+```
+
+`prompt()` returns an assistant message, including on provider failure. Inspect
+`stopReason`: `stop` is normal completion, `length` is the output limit, `error`
+includes `errorMessage`, and `aborted` is cancellation. Agent subscribers observe
+`message_update` events carrying shared model events, followed by `message_end`,
+`turn_end`, `agent_end`, and Harness `settled`. Incremental `partial` messages are
+snapshots; concatenated text deltas match the final text. Establishment failures
+can produce an error without a model `start` event.
+
+The text adapter recognizes optional `reasoning_content`, response ID, routed
+model ID, and token usage. Absent fields stay absent. In particular, missing
+`usage` means unknown, while explicit zero counts mean zero; individual unknown
+counts and costs are not filled with zeros. `usage.input` excludes explicitly
+reported cached tokens, and `usage.totalTokens` retains the provider's count.
+No pricing or synthetic thinking is added.
+
+`harness.models.stream_simple(model, context, options)` returns an
+`AssistantMessageEventStream`; await `stream.result()` for its final message.
+`harness.models.complete_simple(...)` obtains the result from the same streaming
+implementation. For example, summary callers can use:
+
+```python
+result = await harness.models.complete_simple(
+    harness.get_model(),
+    {"systemPrompt": "Summarize briefly.", "messages": [{"role": "user", "content": "..."}]},
+    {"maxTokens": 256, "temperature": 0},
+)
+```
+
+The model access class `Models` is also exported for explicit assembly with an
+existing Agent or Harness. Existing injected `stream_fn`, `stream_proxy`, and
+Harness APIs continue to work. Model dictionaries, messages, and stream option
+mappings retain the existing camelCase field names. There is no API migration.
+
+Pass `session=Session(...)` to reuse a Session through the existing storage API;
+otherwise history stays in memory. API keys stay on the model access object,
+not in the model dictionary or Session. Pass `http_client=httpx.AsyncClient(...)`
+to control the HTTP transport, including offline tests. The caller owns that
+client and must close it; without one the adapter closes its own client per
+request. The 60-second default bounds the entire request, including response
+reading; `timeout_ms` overrides it. This text path performs no retries.
+
+For concurrent cancellation, run `prompt()` in an asyncio task, then
+`await harness.abort()` from another task; await the prompt task to obtain the
+`aborted` result. Cancelling a subscriber alone does not cancel the provider.
+
+This first SDK slice supports text conversation and optional thinking only.
+Tools, images, provider-specific extensions, and automatic context management
+are outside this entry point's current scope; `context_window` records the
+explicit model limit for later context management. A premature EOF without a
+legal `finish_reason` is an error, even after a `[DONE]` marker. A legal finish
+followed by EOF is accepted. Malformed JSON, HTTP failures, and timeouts terminate
+both event iteration and result waiting.
+
+Provider request, payload, response, context, and lifecycle hooks use the existing
+Harness paths. For compatible endpoints needing `max_tokens` instead of the
+default `max_completion_tokens`, adapt the payload at that boundary:
+
+```python
+def legacy_token_limit(event):
+    payload = event["payload"]
+    payload["max_tokens"] = payload.pop("max_completion_tokens")
+    return {"payload": payload}
+
+
+harness.on("before_provider_payload", legacy_token_limit)
+```
+
+### Injected provider example
+
+For custom protocols, inject a `stream_fn`, attach one to the model as
+`stream_fn`/`stream`, or use `stream_proxy`:
 
 ```python
 import asyncio
