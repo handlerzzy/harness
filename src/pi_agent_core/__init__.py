@@ -15,6 +15,7 @@ from .agent_loop import (
     stream_simple,
     streamSimple,
 )
+from .coding_tools import create_coding_tools
 from .event_stream import (
     AssistantMessageEventStream,
     EventStream,
@@ -93,6 +94,7 @@ __all__ = [
     "agent_loop_continue",
     "createAssistantMessageEventStream",
     "create_assistant_message_event_stream",
+    "create_coding_tools",
     "create_harness",
     "runAgentLoop",
     "runAgentLoopContinue",

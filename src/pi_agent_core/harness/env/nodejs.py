@@ -192,7 +192,7 @@ class NodeExecutionEnv:
         callback_error: ExecutionError | None = None
 
         def kill_tree() -> None:
-            if process is None or process.returncode is not None:
+            if process is None:
                 return
             try:
                 if os.name == "nt":
@@ -248,19 +248,31 @@ class NodeExecutionEnv:
 
         stdout_task = asyncio.create_task(pump(process.stdout, stdout_parts, on_stdout))
         stderr_task = asyncio.create_task(pump(process.stderr, stderr_parts, on_stderr))
+
+        async def finish() -> None:
+            await process.wait()
+            await asyncio.gather(stdout_task, stderr_task)
+
+        completion = asyncio.create_task(finish())
         timed_out = False
         try:
             if timeout is None:
-                await process.wait()
+                await asyncio.shield(completion)
             else:
                 try:
-                    await asyncio.wait_for(process.wait(), float(timeout))
+                    # Descendants may keep pipes open after the shell itself exits.
+                    await asyncio.wait_for(asyncio.shield(completion), float(timeout))
                 except TimeoutError:
                     timed_out = True
                     kill_tree()
-                    await process.wait()
-            await asyncio.gather(stdout_task, stderr_task)
+                    await completion
+        except asyncio.CancelledError:
+            kill_tree()
+            await completion
+            raise
         finally:
+            # Do not leave background commands with redirected output behind.
+            kill_tree()
             remove_abort()
 
         if callback_error is not None:
@@ -269,11 +281,15 @@ class NodeExecutionEnv:
             return err(ExecutionError("timeout", f"timeout:{timeout}"))
         if abort_signal and abort_signal.aborted:
             return err(ExecutionError("aborted", "aborted"))
+        exit_code = process.returncode or 0
+        if exit_code < 0:
+            # Preserve the legacy env default; coding tools request shell-style signal status.
+            exit_code = 128 - exit_code if options.get("signalExitCode") else 0
         return ok(
             {
                 "stdout": "".join(stdout_parts),
                 "stderr": "".join(stderr_parts),
-                "exitCode": process.returncode if process.returncode is not None and process.returncode >= 0 else 0,
+                "exitCode": exit_code,
             }
         )
 

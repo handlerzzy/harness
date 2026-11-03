@@ -151,7 +151,7 @@ assistant result is `aborted`. Request failures use assistant `stopReason="error
 ordinary tool failures use tool-result / `tool_execution_end.isError=True` and
 can be handled by a subsequent model turn.
 
-The SDK supports text, custom tool calls/results, and optional thinking.
+The SDK supports text, built-in and custom tool calls/results, and optional thinking.
 Images, additional provider-specific extensions, and automatic context management
 are outside this entry point's current scope; `context_window` records the
 explicit model limit for later context management. A premature EOF without a
@@ -270,6 +270,61 @@ with the same fields. The Harness uses the existing Agent loop to execute calls,
 send their results back to the model, and continue until the task ends. Existing
 `set_tools`, active-tool selection, scheduling, and `tool_call` / `tool_result`
 hooks remain available on the Harness.
+
+### Built-in coding tools
+
+Pass `builtin_tools=True` to `create_harness(...)` to enable `read`, `write`,
+`edit`, and `bash`. They use the same `AgentTool` contract as custom tools and
+can be combined with `tools=[calculator]`. Tool names must be unique; a collision
+raises `ValueError` during SDK creation. Built-ins are disabled by default.
+For an explicitly assembled Harness, use
+`create_coding_tools(NodeExecutionEnv(cwd="/path/to/project"))` and pass the
+returned tools to its existing `tools` option.
+
+| Tool | Input | Behavior |
+| --- | --- | --- |
+| `read` | `path` | Read UTF-8 text; invalid bytes are replaced. |
+| `write` | `path`, `content` | Create or overwrite a UTF-8 file, creating parent directories. |
+| `edit` | `path`, `oldText`, `newText` | Replace one exact occurrence in a UTF-8 file. `oldText` must be nonempty and unique, including overlapping occurrences. |
+| `bash` | `command`, optional `timeout` | Run a real shell command; timeout is a finite positive number of seconds. No command timeout is applied when omitted. |
+
+Relative file paths and commands use the configured `cwd`; absolute file paths
+are accepted. The working directory is a resolution base, not a filesystem
+sandbox. Built-ins request sequential execution of a tool batch, preserving
+model call order so an edit or verification command observes earlier writes.
+Write/edit operations from the same tool set also share a mutation lock.
+This does not coordinate other processes or independently created tool sets.
+
+Missing/unreadable files, invalid inputs, and failed commands become readable
+error tool results for the next model turn (`tool_execution_end.isError=True`).
+Missing or ambiguous edit matches leave the file unchanged. Edit preserves
+untouched bytes, including CRLF line endings and the UTF-8 BOM; matching is
+literal, without fuzzy matching, newline normalization, or multi-edit extensions.
+
+Bash returns combined stdout/stderr and an explicit `Exit code: N` in the model
+result; successful results also expose `exitCode` in `details`. Nonzero exits
+are tool errors, retaining their output and exit code in the error text. On
+Linux, signal termination uses the shell convention `128 + signal number`.
+This is opt-in via the execution environment's `signalExitCode` option; the
+existing direct `NodeExecutionEnv.exec()` default remains unchanged.
+`await harness.abort()` and command timeouts kill the command's process group,
+including children still holding pipes after the main shell exits. The tool
+waits for process/output cleanup before settling. Remaining background jobs in
+that group are also terminated when the command completes; these tools do not
+provide persistent background jobs. Agent cancellation skips later tools and
+model requests. HTTP request retries reuse completed tool results, without
+repeating file mutations or shell commands.
+
+Model-visible read output keeps the first 2,000 lines or 50 KiB, whichever is
+reached first, and points to the original full file. Bash keeps the last 2,000
+lines or 50 KiB and saves full captured output to an absolute temporary log path.
+Truncation is explicitly marked with `Full output: ...`; successful results
+also expose `truncated` and `fullOutputPath` in `details`. Logs are fully flushed
+before returning, including on timeout, cancellation, or nonzero exit; their
+paths remain in error text. Captured shell text uses UTF-8 replacement decoding
+and the existing sanitizer (removes binary control characters and carriage
+returns). Logs persist for inspection; the application may delete them when
+finished. Use `read` or targeted `bash` commands to inspect the reported path.
 
 Observe generation separately from execution:
 

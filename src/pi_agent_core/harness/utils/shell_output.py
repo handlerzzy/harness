@@ -55,7 +55,8 @@ async def execute_shell_with_capture(
                 env,
                 "create_temp_file",
                 "createTempFile",
-                {"prefix": "bash-", "suffix": ".log", "abortSignal": signal},
+                # Captured output must finish flushing even after command cancellation.
+                {"prefix": "bash-", "suffix": ".log"},
             )
             if not temp_result["ok"]:
                 return _to_execution_error(temp_result["error"])
@@ -70,7 +71,6 @@ async def execute_shell_with_capture(
                     "appendFile",
                     full_output_path,
                     str(value),
-                    signal,
                 )
                 if not append_result["ok"]:
                     return _to_execution_error(append_result["error"])
@@ -124,6 +124,7 @@ async def execute_shell_with_capture(
         if capture_error:
             return err(capture_error)
         output = truncation["content"] if truncation["truncated"] else tail_output
+        truncated = truncation["truncated"] or full_output_path is not None
         if not result["ok"]:
             if result["error"].code == "aborted" or (signal and signal.aborted):
                 return ok(
@@ -131,18 +132,24 @@ async def execute_shell_with_capture(
                         "output": output,
                         "exitCode": None,
                         "cancelled": True,
-                        "truncated": truncation["truncated"],
+                        "truncated": truncated,
                         "fullOutputPath": full_output_path,
                     }
                 )
-            return err(result["error"])
+            error = result["error"]
+            message = (
+                f"Command timed out after {options.get('timeout')} seconds" if error.code == "timeout" else str(error)
+            )
+            if truncated:
+                output += f"\n\n[Output truncated. Full output: {full_output_path}]"
+            return err(ExecutionError(error.code, f"{output}\n\n{message}" if output else message, error))
         cancelled = bool(signal and signal.aborted)
         return ok(
             {
                 "output": output,
                 "exitCode": None if cancelled else result["value"]["exitCode"],
                 "cancelled": cancelled,
-                "truncated": truncation["truncated"],
+                "truncated": truncated,
                 "fullOutputPath": full_output_path,
             }
         )
