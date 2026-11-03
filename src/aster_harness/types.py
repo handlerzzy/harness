@@ -99,9 +99,9 @@ class AgentLoopConfig:
     transform_context: (
         Callable[[list[AgentMessage], AbortSignal | None], Awaitable[list[AgentMessage]] | list[AgentMessage]] | None
     ) = None
-    get_api_key: Callable[[str], str | None | Awaitable[str | None]] | None = None
+    get_api_key: Callable[[str], str | Awaitable[str | None] | None] | None = None
     should_stop_after_turn: Callable[[dict[str, Any]], bool | Awaitable[bool]] | None = None
-    prepare_next_turn: Callable[[dict[str, Any]], dict[str, Any] | None | Awaitable[dict[str, Any] | None]] | None = (
+    prepare_next_turn: Callable[[dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any] | None] | None] | None = (
         None
     )
     get_steering_messages: Callable[[], list[AgentMessage] | Awaitable[list[AgentMessage]]] | None = None

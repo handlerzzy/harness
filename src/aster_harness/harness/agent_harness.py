@@ -149,7 +149,7 @@ def _same_handler(left: Callable[..., Any] | None, right: Callable[..., Any]) ->
 async def _invoke_handler(
     handler: Callable[..., Any],
     event: dict[str, Any],
-    signal: AbortSignal | None | object = _NO_SIGNAL,
+    signal: AbortSignal | object | None = _NO_SIGNAL,
 ) -> Any:
     try:
         signature = inspect.signature(handler)
