@@ -79,7 +79,7 @@ includes `errorMessage`, and `aborted` is cancellation. Agent subscribers observ
 snapshots; concatenated text deltas match the final text. Establishment failures
 can produce an error without a model `start` event.
 
-The text adapter recognizes optional `reasoning_content`, response ID, routed
+The adapter recognizes optional `reasoning_content`, response ID, routed
 model ID, and token usage. Absent fields stay absent. In particular, missing
 `usage` means unknown, while explicit zero counts mean zero; individual unknown
 counts and costs are not filled with zeros. `usage.input` excludes explicitly
@@ -110,14 +110,14 @@ not in the model dictionary or Session. Pass `http_client=httpx.AsyncClient(...)
 to control the HTTP transport, including offline tests. The caller owns that
 client and must close it; without one the adapter closes its own client per
 request. The 60-second default bounds the entire request, including response
-reading; `timeout_ms` overrides it. This text path performs no retries.
+reading; `timeout_ms` overrides it. Model requests perform no retries.
 
 For concurrent cancellation, run `prompt()` in an asyncio task, then
 `await harness.abort()` from another task; await the prompt task to obtain the
 `aborted` result. Cancelling a subscriber alone does not cancel the provider.
 
-This first SDK slice supports text conversation and optional thinking only.
-Tools, images, provider-specific extensions, and automatic context management
+The SDK supports text, custom tool calls/results, and optional thinking.
+Images, additional provider-specific extensions, and automatic context management
 are outside this entry point's current scope; `context_window` records the
 explicit model limit for later context management. A premature EOF without a
 legal `finish_reason` is an error, even after a `[DONE]` marker. A legal finish
@@ -225,6 +225,59 @@ calculator = AgentTool(
     execute=calculate,
 )
 ```
+
+Pass `tools=[calculator]` to `create_harness(...)`, then call
+`await harness.prompt("Use calculate to add 2 and 3")`. Tools can also be mappings
+with the same fields. The Harness uses the existing Agent loop to execute calls,
+send their results back to the model, and continue until the task ends. Existing
+`set_tools`, active-tool selection, scheduling, and `tool_call` / `tool_result`
+hooks remain available on the Harness.
+
+Observe generation separately from execution:
+
+```python
+def on_tool_event(event):
+    if event["type"] == "message_update":
+        update = event["assistantMessageEvent"]
+        if update["type"] == "toolcall_delta":
+            print("Generating arguments:", update["contentIndex"], update["delta"])
+        elif update["type"] == "toolcall_end":
+            print("Generated call:", update["toolCall"])
+    elif event["type"] == "tool_execution_start":
+        print("Processing call:", event["toolCallId"], event["toolName"])
+    elif event["type"] == "tool_execution_end":
+        print("Failed" if event["isError"] else "Succeeded", event["toolCallId"], event["result"])
+
+
+unsubscribe = harness.subscribe(on_tool_event)
+```
+
+Model `toolcall_start`, `toolcall_delta`, and `toolcall_end` events describe
+generation; they do not execute tools. `contentIndex` identifies each content
+block, including interleaved calls. Argument deltas are raw JSON fragments;
+`partial.content[*].arguments` stays empty until final parsing. A successful
+`toolcall_end` contains the complete call. Direct `Models` access returns
+`stopReason="toolUse"` and never executes tools itself.
+
+The Agent processes calls only after a model response finishes. A normal
+`tool_calls` finish maps to `toolUse`; arguments must parse as complete JSON and
+pass the tool's schema before its callback runs. Existing schema coercion applies
+(for example, a number may become a string when the schema requires a string).
+`tool_execution_start` marks a processing attempt; validation, unknown-tool, or
+hook rejection can end it with `isError=True` without invoking the callback.
+Raise an exception from `execute` for a recoverable execution failure. These
+failures become readable tool results for the model to correct and retry with
+a new call. Inspect each execution event's `isError`; the final `prompt()` result
+may still succeed after a corrected call.
+
+A length-truncated response executes no tools, even if its arguments happen to
+parse. The loop sends failure results so the model can reissue complete calls;
+unparseable truncated previews remain empty. Invalid JSON on a normal tool finish,
+missing/conflicting call identities, and calls with an unsupported finish reason
+fail the model response (`stopReason="error"`) and execute none of its calls.
+Failed/aborted assistant responses remain in the Session but are omitted from
+subsequent HTTP history so incomplete calls are not replayed. Completed calls and
+their results retain their IDs, names, arguments, and source order across turns.
 
 ## API layers
 

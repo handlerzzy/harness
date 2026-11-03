@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -8,6 +10,7 @@ from .harness.agent_harness import AgentHarness
 from .harness.env import NodeExecutionEnv
 from .harness.session import InMemorySessionStorage, Session
 from .models import Models
+from .types import AgentTool
 
 
 def create_harness(
@@ -23,8 +26,9 @@ def create_harness(
     timeout_ms: float = 60_000,
     http_client: httpx.AsyncClient | None = None,
     session: Session | None = None,
+    tools: Sequence[AgentTool | Mapping[str, Any]] | None = None,
 ) -> AgentHarness:
-    """Assemble the text SDK using an explicit model and an in-memory Session by default."""
+    """Assemble the SDK with custom tools and an in-memory Session by default."""
     return AgentHarness(
         {
             "models": Models(api_key=api_key, http_client=http_client, temperature=temperature, timeout_ms=timeout_ms),
@@ -39,5 +43,6 @@ def create_harness(
             "env": NodeExecutionEnv({"cwd": str(Path(cwd).resolve())}),
             "session": session if session is not None else Session(InMemorySessionStorage()),
             "systemPrompt": system_prompt,
+            "tools": list(tools or []),
         }
     )
