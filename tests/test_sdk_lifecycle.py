@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from pi_agent_core import AbortController, AgentTool, InMemorySessionStorage, Session
+from aster_harness import AbortController, AgentTool, InMemorySessionStorage, Session
 
 from .test_sdk import chunk, sdk, sse
 from .test_sdk_tools import call, recorder, tool_chunk

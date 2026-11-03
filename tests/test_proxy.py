@@ -8,8 +8,8 @@ from typing import Any
 import httpx
 import pytest
 
-from pi_agent_core import AbortController, stream_proxy
-from pi_agent_core.proxy import parse_streaming_json, process_proxy_event, repair_json
+from aster_harness import AbortController, stream_proxy
+from aster_harness.proxy import parse_streaming_json, process_proxy_event, repair_json
 
 from .test_agent_loop import model, usage
 

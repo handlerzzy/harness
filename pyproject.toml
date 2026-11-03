@@ -3,16 +3,16 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pi-agent-core-py"
-version = "0.80.10"
-description = "A faithful Python port of @earendil-works/pi-agent-core"
+name = "aster-harness"
+version = "0.1.0"
+description = "A lightweight Python agent harness with streaming, coding tools, and tree-shaped sessions"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Wesley Zhang" }]
-keywords = ["ai", "agent", "llm", "runtime", "streaming"]
+authors = [{ name = "Aster Harness contributors" }]
+keywords = ["ai", "agent", "harness", "llm", "runtime", "streaming"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -39,11 +39,12 @@ dev = [
 ]
 
 [project.urls]
-Source = "https://github.com/wesleyzhangwq/pi-agent-core-py"
+Source = "https://github.com/handlerzzy/harness"
+"Original Python port" = "https://github.com/wesleyzhangwq/pi-agent-core-py"
 Upstream = "https://github.com/earendil-works/pi/tree/main/packages/agent"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pi_agent_core"]
+packages = ["src/aster_harness"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
@@ -60,10 +61,10 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F403"]
-"src/pi_agent_core/harness/env/nodejs.py" = ["ASYNC240"]
+"src/aster_harness/harness/env/nodejs.py" = ["ASYNC240"]
 "tests/test_execution_env.py" = ["ASYNC240"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
-packages = ["pi_agent_core"]
+packages = ["aster_harness"]

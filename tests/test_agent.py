@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from pi_agent_core import Agent, AgentTool, AssistantMessageEventStream
+from aster_harness import Agent, AgentTool, AssistantMessageEventStream
 
 from .test_agent_loop import assistant, completed_stream, model
 

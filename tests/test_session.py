@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from pi_agent_core.harness.messages import create_branch_summary_message
-from pi_agent_core.harness.session import InMemorySessionStorage, Session, build_session_context, uuidv7
-from pi_agent_core.harness.types import SessionError
+from aster_harness.harness.messages import create_branch_summary_message
+from aster_harness.harness.session import InMemorySessionStorage, Session, build_session_context, uuidv7
+from aster_harness.harness.types import SessionError
 
 
 async def test_session_tree_branching_and_context() -> None:

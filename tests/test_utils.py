@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from pi_agent_core._utils import (
+from aster_harness._utils import (
     js_json_stringify,
     js_number_to_string,
     js_object_items,
@@ -75,7 +75,7 @@ def test_js_property_and_utf16_helpers_match_ecmascript() -> None:
 
 
 def test_node_entrypoint_reexports_the_core_runtime() -> None:
-    from pi_agent_core.node import Agent, NodeExecutionEnv, runAgentLoop
+    from aster_harness.node import Agent, NodeExecutionEnv, runAgentLoop
 
     assert Agent is not None
     assert NodeExecutionEnv is not None
@@ -83,7 +83,7 @@ def test_node_entrypoint_reexports_the_core_runtime() -> None:
 
 
 def test_all_upstream_executable_exports_are_available() -> None:
-    import pi_agent_core
+    import aster_harness
 
     expected = {
         "Agent",
@@ -158,12 +158,12 @@ def test_all_upstream_executable_exports_are_available() -> None:
         "truncateTail",
         "uuidv7",
     }
-    assert expected <= set(pi_agent_core.__all__)
-    assert all(hasattr(pi_agent_core, name) for name in expected)
+    assert expected <= set(aster_harness.__all__)
+    assert all(hasattr(aster_harness, name) for name in expected)
 
 
 def test_all_upstream_public_type_names_are_importable() -> None:
-    import pi_agent_core
+    import aster_harness
 
     expected = {
         "AbortEvent",
@@ -292,5 +292,5 @@ def test_all_upstream_public_type_names_are_importable() -> None:
         "TruncationOptions",
         "TruncationResult",
     }
-    assert expected <= set(pi_agent_core.__all__)
-    assert all(hasattr(pi_agent_core, name) for name in expected)
+    assert expected <= set(aster_harness.__all__)
+    assert all(hasattr(aster_harness, name) for name in expected)

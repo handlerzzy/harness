@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from pi_agent_core.harness.env import NodeExecutionEnv
-from pi_agent_core.harness.session import (
+from aster_harness.harness.env import NodeExecutionEnv
+from aster_harness.harness.session import (
     InMemorySessionRepo,
     InMemorySessionStorage,
     JsonlSessionRepo,
@@ -16,8 +16,8 @@ from pi_agent_core.harness.session import (
     Session,
     load_jsonl_session_metadata,
 )
-from pi_agent_core.harness.session.jsonl_repo import _compare_created_at_desc
-from pi_agent_core.harness.types import SessionError, get_or_throw
+from aster_harness.harness.session.jsonl_repo import _compare_created_at_desc
+from aster_harness.harness.types import SessionError, get_or_throw
 
 
 def message_entry(entry_id: str, parent: str | None, text: str, *, role: str = "user") -> dict[str, Any]:

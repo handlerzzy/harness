@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from pi_agent_core import AbortController
-from pi_agent_core._utils import js_utf16_length, js_utf16_slice
-from pi_agent_core.harness.env import NodeExecutionEnv
-from pi_agent_core.harness.env.nodejs import _find_windows_bash, _shell_arguments
-from pi_agent_core.harness.session import JsonlSessionStorage, Session, load_jsonl_session_metadata
-from pi_agent_core.harness.types import get_or_throw
-from pi_agent_core.harness.types import ok as harness_ok
-from pi_agent_core.harness.utils import (
+from aster_harness import AbortController
+from aster_harness._utils import js_utf16_length, js_utf16_slice
+from aster_harness.harness.env import NodeExecutionEnv
+from aster_harness.harness.env.nodejs import _find_windows_bash, _shell_arguments
+from aster_harness.harness.session import JsonlSessionStorage, Session, load_jsonl_session_metadata
+from aster_harness.harness.types import get_or_throw
+from aster_harness.harness.types import ok as harness_ok
+from aster_harness.harness.utils import (
     execute_shell_with_capture,
     format_size,
     truncate_head,

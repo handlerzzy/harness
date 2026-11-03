@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from pi_agent_core import JS_UNDEFINED, AgentTool, AssistantMessageEventStream
-from pi_agent_core.harness import AgentHarness, AgentHarnessError
-from pi_agent_core.harness.env import NodeExecutionEnv
-from pi_agent_core.harness.session import InMemorySessionStorage, Session
+from aster_harness import JS_UNDEFINED, AgentTool, AssistantMessageEventStream
+from aster_harness.harness import AgentHarness, AgentHarnessError
+from aster_harness.harness.env import NodeExecutionEnv
+from aster_harness.harness.session import InMemorySessionStorage, Session
 
 from .test_agent_loop import assistant, completed_stream, model
 

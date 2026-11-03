@@ -3,20 +3,20 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from pi_agent_core.harness.env import NodeExecutionEnv
-from pi_agent_core.harness.prompt_templates import (
+from aster_harness.harness.env import NodeExecutionEnv
+from aster_harness.harness.prompt_templates import (
     format_prompt_template_invocation,
     load_prompt_templates,
     load_sourced_prompt_templates,
     parse_command_args,
 )
-from pi_agent_core.harness.skills import format_skill_invocation, load_skills, load_sourced_skills
-from pi_agent_core.harness.system_prompt import format_skills_for_system_prompt
-from pi_agent_core.harness.types import get_or_throw
+from aster_harness.harness.skills import format_skill_invocation, load_skills, load_sourced_skills
+from aster_harness.harness.system_prompt import format_skills_for_system_prompt
+from aster_harness.harness.types import get_or_throw
 
 
 def test_zero_positional_argument_does_not_wrap_to_last_python_list_item() -> None:
-    from pi_agent_core.harness.prompt_templates import substitute_args
+    from aster_harness.harness.prompt_templates import substitute_args
 
     assert substitute_args("$0 $1 $2", ["first", "second"]) == " first second"
 

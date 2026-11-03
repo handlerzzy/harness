@@ -1,5 +1,11 @@
 # Upstream parity
 
+Aster Harness retains this map of the original Python runtime port.
+The Python package has been renamed to `aster_harness`; SDK additions and
+deliberate scope choices are described in [README.md](README.md) and
+[docs/migration.md](docs/migration.md). This map records the inherited runtime
+baseline, not compatibility with the latest Pi release.
+
 This project rewrites the runtime behavior of
 `@earendil-works/pi-agent-core` package `0.80.10` at upstream commit
 `3da591ab74ab9ab407e72ed882600b2c851fae21`.
@@ -8,31 +14,31 @@ This project rewrites the runtime behavior of
 
 | Upstream TypeScript | Python implementation | Covered behavior |
 | --- | --- | --- |
-| `src/agent.ts` | `src/pi_agent_core/agent.py` | Stateful agent, lifecycle, queues, abort, listeners, mutators |
-| `src/agent-loop.ts` | `src/pi_agent_core/agent_loop.py` | Prompt/continue loops, streaming, hooks, tool validation and execution |
-| `src/proxy.ts` | `src/pi_agent_core/proxy.py` | Proxy request, SSE decoding, partial-message reconstruction, partial JSON |
-| `src/types.ts` | `src/pi_agent_core/types.py` | Models, context, tools, loop configuration, event/result contracts |
-| `src/index.ts` | `src/pi_agent_core/__init__.py` | Public package exports |
-| `src/node.ts` | `src/pi_agent_core/node.py` | Node-style entry point plus local execution environment |
-| `src/harness/agent-harness.ts` | `src/pi_agent_core/harness/agent_harness.py` | Hooks, save points, queues, resources, compaction, tree navigation |
-| `src/harness/messages.ts` | `src/pi_agent_core/harness/messages.py` | Custom, shell, branch-summary and compaction-summary messages |
-| `src/harness/prompt-templates.ts` | `src/pi_agent_core/harness/prompt_templates.py` | Discovery, frontmatter, diagnostics, command parsing, substitution |
-| `src/harness/skills.ts` | `src/pi_agent_core/harness/skills.py` | Recursive loading, ignore rules, metadata validation, invocation formatting |
-| `src/harness/system-prompt.ts` | `src/pi_agent_core/harness/system_prompt.py` | Skill list formatting and XML escaping |
-| `src/harness/types.ts` | `src/pi_agent_core/harness/types.py` | Results, coded errors, resources, storage and execution protocols |
-| `src/harness/compaction/branch-summarization.ts` | `src/pi_agent_core/harness/compaction/branch_summarization.py` | Branch collection, preparation and summary generation |
-| `src/harness/compaction/compaction.ts` | `src/pi_agent_core/harness/compaction/compaction.py` | Token estimates, cut points, preparation and summary generation |
-| `src/harness/compaction/utils.ts` | `src/pi_agent_core/harness/compaction/utils.py` | Conversation serialization and file-operation tracking |
-| `src/harness/env/nodejs.ts` | `src/pi_agent_core/harness/env/nodejs.py` | Files, symlinks, shell execution, cancellation, timeouts and temp paths |
-| `src/harness/session/jsonl-repo.ts` | `src/pi_agent_core/harness/session/jsonl_repo.py` | Create, list, open, fork and delete JSONL sessions |
-| `src/harness/session/jsonl-storage.ts` | `src/pi_agent_core/harness/session/jsonl_storage.py` | Version-3 JSONL metadata, entries, leaf and label restoration |
-| `src/harness/session/memory-repo.ts` | `src/pi_agent_core/harness/session/memory_repo.py` | In-memory repository lifecycle and forking |
-| `src/harness/session/memory-storage.ts` | `src/pi_agent_core/harness/session/memory_storage.py` | Tree storage, labels, leaf records and path reconstruction |
-| `src/harness/session/repo-utils.ts` | `src/pi_agent_core/harness/session/repo_utils.py` | IDs, timestamps, fork selection and result unwrapping |
-| `src/harness/session/session.ts` | `src/pi_agent_core/harness/session/session.py` | Session mutation, context transforms/projectors, branching and metadata |
-| `src/harness/session/uuid.ts` | `src/pi_agent_core/harness/session/uuid.py` | Monotonic UUIDv7 generation |
-| `src/harness/utils/shell-output.ts` | `src/pi_agent_core/harness/utils/shell_output.py` | Binary sanitization and bounded/full streamed capture |
-| `src/harness/utils/truncate.ts` | `src/pi_agent_core/harness/utils/truncate.py` | UTF-8/UTF-16-aware head, tail and line truncation |
+| `src/agent.ts` | `src/aster_harness/agent.py` | Stateful agent, lifecycle, queues, abort, listeners, mutators |
+| `src/agent-loop.ts` | `src/aster_harness/agent_loop.py` | Prompt/continue loops, streaming, hooks, tool validation and execution |
+| `src/proxy.ts` | `src/aster_harness/proxy.py` | Proxy request, SSE decoding, partial-message reconstruction, partial JSON |
+| `src/types.ts` | `src/aster_harness/types.py` | Models, context, tools, loop configuration, event/result contracts |
+| `src/index.ts` | `src/aster_harness/__init__.py` | Public package exports |
+| `src/node.ts` | `src/aster_harness/node.py` | Node-style entry point plus local execution environment |
+| `src/harness/agent-harness.ts` | `src/aster_harness/harness/agent_harness.py` | Hooks, save points, queues, resources, compaction, tree navigation |
+| `src/harness/messages.ts` | `src/aster_harness/harness/messages.py` | Custom, shell, branch-summary and compaction-summary messages |
+| `src/harness/prompt-templates.ts` | `src/aster_harness/harness/prompt_templates.py` | Discovery, frontmatter, diagnostics, command parsing, substitution |
+| `src/harness/skills.ts` | `src/aster_harness/harness/skills.py` | Recursive loading, ignore rules, metadata validation, invocation formatting |
+| `src/harness/system-prompt.ts` | `src/aster_harness/harness/system_prompt.py` | Skill list formatting and XML escaping |
+| `src/harness/types.ts` | `src/aster_harness/harness/types.py` | Results, coded errors, resources, storage and execution protocols |
+| `src/harness/compaction/branch-summarization.ts` | `src/aster_harness/harness/compaction/branch_summarization.py` | Branch collection, preparation and summary generation |
+| `src/harness/compaction/compaction.ts` | `src/aster_harness/harness/compaction/compaction.py` | Token estimates, cut points, preparation and summary generation |
+| `src/harness/compaction/utils.ts` | `src/aster_harness/harness/compaction/utils.py` | Conversation serialization and file-operation tracking |
+| `src/harness/env/nodejs.ts` | `src/aster_harness/harness/env/nodejs.py` | Files, symlinks, shell execution, cancellation, timeouts and temp paths |
+| `src/harness/session/jsonl-repo.ts` | `src/aster_harness/harness/session/jsonl_repo.py` | Create, list, open, fork and delete JSONL sessions |
+| `src/harness/session/jsonl-storage.ts` | `src/aster_harness/harness/session/jsonl_storage.py` | Version-3 JSONL metadata, entries, leaf and label restoration |
+| `src/harness/session/memory-repo.ts` | `src/aster_harness/harness/session/memory_repo.py` | In-memory repository lifecycle and forking |
+| `src/harness/session/memory-storage.ts` | `src/aster_harness/harness/session/memory_storage.py` | Tree storage, labels, leaf records and path reconstruction |
+| `src/harness/session/repo-utils.ts` | `src/aster_harness/harness/session/repo_utils.py` | IDs, timestamps, fork selection and result unwrapping |
+| `src/harness/session/session.ts` | `src/aster_harness/harness/session/session.py` | Session mutation, context transforms/projectors, branching and metadata |
+| `src/harness/session/uuid.ts` | `src/aster_harness/harness/session/uuid.py` | Monotonic UUIDv7 generation |
+| `src/harness/utils/shell-output.ts` | `src/aster_harness/harness/utils/shell_output.py` | Binary sanitization and bounded/full streamed capture |
+| `src/harness/utils/truncate.ts` | `src/aster_harness/harness/utils/truncate.py` | UTF-8/UTF-16-aware head, tail and line truncation |
 
 `abort.py`, `event_stream.py`, `schema.py`, and `_utils.py` provide Python
 counterparts for behavior that the TypeScript package imports from
@@ -41,9 +47,9 @@ counterparts for behavior that the TypeScript package imports from
 ## Public API policy
 
 Every executable export from upstream `src/index.ts` is available from
-`pi_agent_core`. The package additionally provides idiomatic snake-case names;
+`aster_harness`. The package additionally provides idiomatic snake-case names;
 camel-case aliases preserve straightforward migration from TypeScript.
-`pi_agent_core.node` re-exports the core API and `NodeExecutionEnv`, matching the
+`aster_harness.node` re-exports the core API and `NodeExecutionEnv`, matching the
 upstream `./node` entry point.
 
 ## Intentional language adaptations

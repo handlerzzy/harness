@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from pi_agent_core import AgentTool
+from aster_harness import AgentTool
 
 from .test_sdk import ChunkedBody, chunk, sdk, sse
 

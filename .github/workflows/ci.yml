@@ -24,9 +24,9 @@ jobs:
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Ruff format
-        run: ruff format --check src tests
+        run: ruff format --check src tests examples
       - name: Ruff lint
-        run: ruff check src tests
+        run: ruff check src tests examples
       - name: Strict typing
         run: mypy src
       - name: Tests
@@ -45,6 +45,7 @@ jobs:
           python -m build
       - name: Smoke-test wheel
         run: |
-          python -m venv /tmp/pi-agent-wheel-test
-          /tmp/pi-agent-wheel-test/bin/pip install dist/*.whl
-          /tmp/pi-agent-wheel-test/bin/python -c "import pi_agent_core; assert pi_agent_core.__version__ == '0.80.10'"
+          python -m venv /tmp/aster-harness-wheel-test
+          /tmp/aster-harness-wheel-test/bin/pip install dist/*.whl
+          /tmp/aster-harness-wheel-test/bin/python -c "from importlib.metadata import version; import aster_harness; assert aster_harness.__version__ == version('aster-harness') == '0.1.0'"
+          /tmp/aster-harness-wheel-test/bin/python examples/chat.py --help

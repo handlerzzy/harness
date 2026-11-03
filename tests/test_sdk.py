@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from pi_agent_core import create_harness
+from aster_harness import create_harness
 
 
 def sse(*chunks: dict[str, Any], done: bool = True) -> bytes:
@@ -220,7 +220,7 @@ async def test_failures_settle_agent_and_model_results(tmp_path: Path, failure: 
 
 
 async def test_sdk_uses_existing_hooks_and_explicit_session_without_saving_credentials(tmp_path: Path) -> None:
-    from pi_agent_core import InMemorySessionStorage, Session
+    from aster_harness import InMemorySessionStorage, Session
 
     requests: list[httpx.Request] = []
     session = Session(InMemorySessionStorage())
@@ -344,7 +344,7 @@ async def test_model_terminal_result_waits_for_http_cleanup(tmp_path: Path) -> N
 
 
 async def test_pre_aborted_model_stream_settles_without_sending_http(tmp_path: Path) -> None:
-    from pi_agent_core import AbortController
+    from aster_harness import AbortController
 
     def respond(_: httpx.Request) -> httpx.Response:
         pytest.fail("A pre-aborted request must not reach the provider")

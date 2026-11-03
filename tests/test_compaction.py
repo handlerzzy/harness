@@ -4,8 +4,8 @@ from typing import Any
 
 import pytest
 
-from pi_agent_core import AbortController
-from pi_agent_core.harness.compaction import (
+from aster_harness import AbortController
+from aster_harness.harness.compaction import (
     DEFAULT_COMPACTION_SETTINGS,
     calculate_context_tokens,
     collect_entries_for_branch_summary,
@@ -24,7 +24,7 @@ from pi_agent_core.harness.compaction import (
     serialize_conversation,
     should_compact,
 )
-from pi_agent_core.harness.session import InMemorySessionStorage, Session
+from aster_harness.harness.session import InMemorySessionStorage, Session
 
 STAMP = "2026-01-01T00:00:00.000Z"
 

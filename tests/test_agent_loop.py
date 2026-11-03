@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from pi_agent_core import (
+from aster_harness import (
     AgentContext,
     AgentLoopConfig,
     AgentTool,

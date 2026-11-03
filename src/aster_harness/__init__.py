@@ -1,4 +1,4 @@
-"""Python parity port of @earendil-works/pi-agent-core."""
+"""Aster Harness: a Python agent runtime derived from Pi's agent core."""
 
 from ._utils import JS_UNDEFINED
 from .abort import AbortController, AbortSignal
@@ -108,6 +108,6 @@ __all__ = [
     "validate_tool_arguments",
 ]
 
-__version__ = "0.80.10"
+__version__ = "0.1.0"
 
 __all__ = sorted(set(__all__ + _harness_all))

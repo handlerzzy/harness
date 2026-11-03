@@ -10,3 +10,6 @@ coverage.json
 build/
 dist/
 htmlcov/
+.env
+.env.*
+!.env.example

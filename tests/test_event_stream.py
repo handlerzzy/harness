@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from pi_agent_core import AbortController, EventStream
+from aster_harness import AbortController, EventStream
 
 
 @pytest.mark.asyncio

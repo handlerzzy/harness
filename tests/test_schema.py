@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from pi_agent_core import validateToolArguments
+from aster_harness import validateToolArguments
 
 
 def _case(schema: dict[str, object], value: object) -> tuple[dict[str, object], dict[str, object]]:
